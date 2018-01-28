@@ -1,4 +1,30 @@
+<#
+.SYNOPSIS
+Short description
 
+.DESCRIPTION
+Long description
+
+.PARAMETER Path
+Parameter description
+
+.PARAMETER Value
+Parameter description
+
+.EXAMPLE
+C:\> $R = Get-Bytes -Value "Marc" | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartet
+C:\> $R.ForEach({[PSCustomObject]$_}) | Format-Table -AutoSize Character, DecimalByte, Unicode, Binary
+
+Character DecimalByte Unicode Binary
+--------- ----------- ------- ------
+        M          77 U+004D  0100 1101
+        a          97 U+0061  0110 0001
+        r         114 U+0072  0111 0010
+        c          99 U+0063  0110 0011
+
+.NOTES
+General notes
+#>
 function Get-Bytes {
     [CmdletBinding()]
     Param(
@@ -12,86 +38,59 @@ function Get-Bytes {
         [ValidateNotNullOrEmpty()]
         [string[]]$Value
     )
-    end {
+    process {
         if ($Path) {
-            Get-Item $Path | Get-Content -Raw | ForEach-Object -Process { [System.Text.Encoding]::UTF8.GetBytes($_) }
+            $Value = Get-Item $Path | Get-Content -Raw
         }
-        else {
-            $Value | ForEach-Object -Process { [System.Text.Encoding]::UTF8.GetBytes($_) } | `
-                ForEach-Object -Process { 
-                $ConvertedBytes = ${DecimalByte: $_}
-                Write-Output -InputObject $ConvertedBytes  -NoEnumerate
-            }
-        }
+
+        $Value | ForEach-Object {
+            [System.Text.Encoding]::UTF8.GetBytes($_)
+        }  | ForEach-Object {
+            Write-Output -InputObject @{'DecimalByte' = $_}
+        } 
     }
 }
 
 function ConvertTo-Binary {
     [CmdletBinding()]
-    [OutputType([string])]
     Param(
         [Parameter(Mandatory = $true,
             ValueFromPipeline = $true)]
         [ValidateNotNullOrEmpty()]
-        [byte[]]$Bytes,
+        [PSCustomObject []]$ConvertedBytes,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [ValidateSet("Octet", "Quartet")]
-        [ValidateNotNullOrEmpty()]
-        [string]$Format = "Octet",
-
-        [switch]$ShowDecimalNotation
+        [string]$Format = "Octet"
     )
+    begin {
+        $OFS = ''
+    }
     process {
-        $DecimalByte = $_
-        $OriginalDecimalByte = $DecimalByte
-        $buffer = [byte[]]::new(8)
-        $bufferLength = $buffer.Length - 1
+        if ($_.DecimalByte) {
+            $DecimalByte = $_.DecimalByte
+            $buffer = [byte[]]::new(8)
+            $bufferLength = $buffer.Length - 1
 
-        while ( $bufferLength -ne 0 ) {
-            $Q = $DecimalByte % 2
-            $buffer[$bufferLength--] = $Q
-            $DecimalByte = [Math]::Floor($DecimalByte * .5)
-        }
+            while ( $bufferLength -ne 0 ) {
+                $Q = $DecimalByte % 2
+                $buffer[$bufferLength--] = $Q
+                $DecimalByte = [Math]::Floor($DecimalByte * .5)
+            }
         
-        if ($Format -eq "Octet") {
-            $BString = "$buffer"
-        }
-        else {
-            $BString = "$buffer".Substring(0, 4) + " " + "$buffer".Substring(4)
-        }
+            if ($Format -eq "Octet") {
+                $BString = "$buffer"
+            }
+            else {
+                $BString = "$buffer".Substring(0, 4) + " " + "$buffer".Substring(4)
+            }
 
-        if ($ShowDecimalNotation.IsPresent -eq $false) {
-            $BString = "$BString"
+            $_.Add('Binary', $BString)
+            
+            Write-Output -InputObject $ConvertedBytes 
         }
-        else { 
-            $BString = "$BString".Insert(0, $("$OriginalDecimalByte".PadRight(4) + " : "))
-        }
-
-        $BString
     }
 }
-<#
-.SYNOPSIS
-Short description
-
-.DESCRIPTION
-Long description
-
-.PARAMETER Bytes
-Parameter description
-
-.PARAMETER ShowDecimalNotation
-Parameter description
-
-.EXAMPLE
-Get-Bytes E:\index.html | ConvertTo-UTF8 -ShowDecimalNotation
-Get-Item E:\index.html | Get-Bytes | ConvertTo-UTF8 -ShowDecimalNotation
-Get-Bytes -Value "Marc" | ConvertTo-UTF8 -ShowDecimalNotation
-
-.NOTES
-General notes
-#>
 function ConvertTo-UTF8 {
     [CmdletBinding()]
     [OutputType([string])]
@@ -99,9 +98,7 @@ function ConvertTo-UTF8 {
         [Parameter(Mandatory = $true,
             ValueFromPipeline = $true)]
         [ValidateNotNullOrEmpty()]
-        [byte[]]$Bytes,
-
-        [switch]$ShowDecimalNotation
+        [PSCustomObject[]]$ConvertedBytes
     )
 
     begin {
@@ -109,30 +106,27 @@ function ConvertTo-UTF8 {
     }
 
     process {
-        if ($_.DecimalByte)
-        $Point = $_
-        # BMP (Basic Multilingual Plane) only.
-        if ($Point -lt 65536) {
-            # $Subplane represents blocks of 4096 code points
-            $Subplane = $HexDecimalTable[[Math]::Floor($Point / [Math]::Pow(16, 3) % 16)]
-            # $256Block represents blocks of 256 code points
-            $256Block = $HexDecimalTable[[Math]::Floor($Point / [Math]::Pow(16, 2) % 16)]
-            $PointRow = $HexDecimalTable[[Math]::Floor($Point / 16) % 16]
-            $PointCol = $HexDecimalTable[$Point % 16]
-            $Unicode = "$Subplane$256Block$PointRow$PointCol".Insert(0, 'U+')
+        if ($_.DecimalByte) {
 
-            if ($ShowDecimalNotation.IsPresent -eq $true) { 
-                $Unicode = $Unicode.Insert(0, $("$Point".PadRight(4) + " : "))
+            $Point = $_.DecimalByte
+            # BMP (Basic Multilingual Plane) only.
+            if ($Point -lt 65536) {
+                # $Subplane represents blocks of 4096 code points
+                $Subplane = $HexDecimalTable[[Math]::Floor($Point / [Math]::Pow(16, 3) % 16)]
+                # $256Block represents blocks of 256 code points
+                $256Block = $HexDecimalTable[[Math]::Floor($Point / [Math]::Pow(16, 2) % 16)]
+                $PointRow = $HexDecimalTable[[Math]::Floor($Point / 16) % 16]
+                $PointCol = $HexDecimalTable[$Point % 16]
+                $Unicode = "$Subplane$256Block$PointRow$PointCol".Insert(0, 'U+')
             }
+            else {
+                $Unicode = "U+FFFF"
+            }
+
+            $_.Add('Unicode', $Unicode)
+            
+            Write-Output $ConvertedBytes
         }
-        else {
-            $Unicode = "U+FFFF"
-        }
-        $Out = @{Point = $Point
-            Unicode = $Unicode
-        } 
-        $InformationPreference = 'Continue'
-        Write-Information -MessageData $Out -PipelineVariable XXX
     }
 }
 
@@ -141,19 +135,18 @@ function ConvertTo-Character {
     [OutputType([string])]
     Param(
         [Parameter(Mandatory = $true,
-            ValueFromPipelineByPropertyName = $true)]
+            ValueFromPipeline = $true)]
         [ValidateNotNullOrEmpty()]
-        $XXX,
-
-        [switch]$Show
+        [PSCustomObject[]]$ConvertedBytes
     )
 
-    begin {
-
-    }
-
     process {
-        $XXX.Unicode
+        if ($_.DecimalByte) {
+        
+            $_.Add('Character', [System.Convert]::ToChar($_.DecimalByte))
+            
+            Write-Output $ConvertedBytes
+        }
     }
 }
 
