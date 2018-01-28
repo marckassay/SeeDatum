@@ -1,18 +1,20 @@
 <#
 .SYNOPSIS
-Short description
+Can parse a string or file and outputs the values as decimal bytes in a PSCustomObject.
 
 .DESCRIPTION
-Long description
+This function is the catalyst function for all three ConvertTo functions; ConvertTo-Binary, ConvertTo-Character, ConvertTo-UTF8
 
 .PARAMETER Path
-Parameter description
+A path to a file
 
 .PARAMETER Value
-Parameter description
+A string value
 
 .EXAMPLE
-C:\> $R = Get-Bytes -Value "Marc" | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartet
+Parses a string and pipes its bytes thru ConvertTo functions.
+
+C:\> $R = Get-Bytes -Value "Marc" | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartets
 C:\> $R.ForEach({[PSCustomObject]$_}) | Format-Table -AutoSize Character, DecimalByte, Unicode, Binary
 
 Character DecimalByte Unicode Binary
@@ -22,8 +24,30 @@ Character DecimalByte Unicode Binary
         r         114 U+0072  0111 0010
         c          99 U+0063  0110 0011
 
-.NOTES
-General notes
+.EXAMPLE
+Parses a file and pipes its bytes thru ConvertTo functions.
+
+C:\> $R = Get-Bytes -Path C:\repo\AIT\.editorconfig | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartets
+C:\> $R.ForEach({[PSCustomObject]$_}) | Format-Table -AutoSize Character, DecimalByte, Unicode, Binary
+
+Character DecimalByte Unicode Binary
+--------- ----------- ------- ------
+        #          35 U+0023  0010 0011
+                   32 U+0020  0010 0000
+        E          69 U+0045  0100 0101
+        d         100 U+0064  0110 0100
+        i         105 U+0069  0110 1001
+        t         116 U+0074  0111 0100
+        o         111 U+006F  0110 1111
+        r         114 U+0072  0111 0010
+        C          67 U+0043  0100 0011
+        o         111 U+006F  0110 1111
+        n         110 U+006E  0110 1110
+        f         102 U+0066  0110 0110
+        i         105 U+0069  0110 1001
+        g         103 U+0067  0110 0111
+                   32 U+0020  0010 0000
+
 #>
 function Get-Bytes {
     [CmdletBinding()]
@@ -38,19 +62,61 @@ function Get-Bytes {
         [ValidateNotNullOrEmpty()]
         [string[]]$Value
     )
-    process {
+    begin {
         if ($Path) {
             $Value = Get-Item $Path | Get-Content -Raw
         }
-
-        $Value | ForEach-Object {
+    }
+    process {
+        $Value | ForEach-Object -Process {
             [System.Text.Encoding]::UTF8.GetBytes($_)
-        }  | ForEach-Object {
+        }  | ForEach-Object -Process {
             Write-Output -InputObject @{'DecimalByte' = $_}
         } 
     }
 }
 
+<#
+.SYNOPSIS
+To be piped after Get-Bytes function and will output binary notation from those bytes.
+
+.DESCRIPTION
+Long description
+
+.PARAMETER ConvertedBytes
+Pipeline value from Get-Bytes.
+
+.PARAMETER Format
+To show binary notation in an Octet or Quartets.
+
+.EXAMPLE
+Get-Bytes -Path C:\repo\AIT\.editorconfig | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartets
+
+.EXAMPLE
+Parses a file and pipes its bytes thru ConvertTo functions.
+
+C:\> $R = Get-Bytes -Path C:\repo\AIT\.editorconfig | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartets
+C:\> $R.ForEach({[PSCustomObject]$_}) | Format-Table -AutoSize Character, DecimalByte, Unicode, Binary
+
+Character DecimalByte Unicode Binary
+--------- ----------- ------- ------
+        #          35 U+0023  0010 0011
+                   32 U+0020  0010 0000
+        E          69 U+0045  0100 0101
+        d         100 U+0064  0110 0100
+        i         105 U+0069  0110 1001
+        t         116 U+0074  0111 0100
+        o         111 U+006F  0110 1111
+        r         114 U+0072  0111 0010
+        C          67 U+0043  0100 0011
+        o         111 U+006F  0110 1111
+        n         110 U+006E  0110 1110
+        f         102 U+0066  0110 0110
+        i         105 U+0069  0110 1001
+        g         103 U+0067  0110 0111
+                   32 U+0020  0010 0000
+
+#>
 function ConvertTo-Binary {
     [CmdletBinding()]
     Param(
@@ -60,7 +126,7 @@ function ConvertTo-Binary {
         [PSCustomObject []]$ConvertedBytes,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet("Octet", "Quartet")]
+        [ValidateSet("Octet", "Quartets")]
         [string]$Format = "Octet"
     )
     begin {
@@ -91,6 +157,30 @@ function ConvertTo-Binary {
         }
     }
 }
+
+<#
+.SYNOPSIS
+To be piped after Get-Bytes function and will output Unicode from those bytes.
+
+.DESCRIPTION
+Long description
+
+.PARAMETER ConvertedBytes
+Pipeline value from Get-Bytes.
+
+.EXAMPLE
+C:\> Get-Bytes -Path C:\temp\AIT\.editorconfig | ConvertTo-UTF8
+
+Name                           Value
+----                           -----
+DecimalByte                    35
+Unicode                        U+0023
+DecimalByte                    32
+Unicode                        U+0020
+DecimalByte                    69
+Unicode                        U+0045
+
+#>
 function ConvertTo-UTF8 {
     [CmdletBinding()]
     [OutputType([string])]
@@ -100,11 +190,9 @@ function ConvertTo-UTF8 {
         [ValidateNotNullOrEmpty()]
         [PSCustomObject[]]$ConvertedBytes
     )
-
     begin {
         [string[]]$HexDecimalTable = '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
     }
-
     process {
         if ($_.DecimalByte) {
 
@@ -130,6 +218,41 @@ function ConvertTo-UTF8 {
     }
 }
 
+<#
+.SYNOPSIS
+To be piped after Get-Bytes function and will add a Character key to the pipeline variable.
+
+.DESCRIPTION
+Long description
+
+.PARAMETER ConvertedBytes
+Pipeline value from Get-Bytes.
+
+.EXAMPLE
+Parses a file and pipes its bytes thru ConvertTo functions.
+
+C:\> $R = Get-Bytes -Path C:\repo\AIT\.editorconfig | ConvertTo-UTF8 | ConvertTo-Character | ConvertTo-Binary -Format Quartets
+C:\> $R.ForEach({[PSCustomObject]$_}) | Format-Table -AutoSize Character, DecimalByte, Unicode, Binary
+
+Character DecimalByte Unicode Binary
+--------- ----------- ------- ------
+        #          35 U+0023  0010 0011
+                   32 U+0020  0010 0000
+        E          69 U+0045  0100 0101
+        d         100 U+0064  0110 0100
+        i         105 U+0069  0110 1001
+        t         116 U+0074  0111 0100
+        o         111 U+006F  0110 1111
+        r         114 U+0072  0111 0010
+        C          67 U+0043  0100 0011
+        o         111 U+006F  0110 1111
+        n         110 U+006E  0110 1110
+        f         102 U+0066  0110 0110
+        i         105 U+0069  0110 1001
+        g         103 U+0067  0110 0111
+                   32 U+0020  0010 0000
+
+#>
 function ConvertTo-Character {
     [CmdletBinding()]
     [OutputType([string])]
@@ -139,12 +262,11 @@ function ConvertTo-Character {
         [ValidateNotNullOrEmpty()]
         [PSCustomObject[]]$ConvertedBytes
     )
-
     process {
         if ($_.DecimalByte) {
         
             $_.Add('Character', [System.Convert]::ToChar($_.DecimalByte))
-            
+        
             Write-Output $ConvertedBytes
         }
     }
