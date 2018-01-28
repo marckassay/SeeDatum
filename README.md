@@ -1,75 +1,121 @@
-# EndOfLine
+# SeeDatum
 
-Objective of this module is conversion of end-of-line (EOL) characters in UTF-8 files: CRLF to LF or LF to CRLF
+Converts a file or string value into decimal bytes which then can be piped into: `ConvertTo-UTF8`, `ConvertTo-Binary` and/or `ConvertTo-Character`
 
-[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/marckassay/EndOfLine/blob/master/LICENSE) [![PS Gallery](https://img.shields.io/badge/install-PS%20Gallery-blue.svg)](https://www.powershellgallery.com/packages/EndOfLine/)
-
-## Features
-
-* Imports `.gitignore` file for exclusion of files and directories, if there is a file.  You can use `SkipIgnoreFile` switch to prevent importing that file.  And you can switch `Exclude` to add additional items to be excluded.
-* Simulate what will happen via `WhatIf` switch
-* Outputs a report on all files.  The `Verbose` switch can be used too.
-
-## Caveat
-
-* At first, use the -WhatIf switch parameter to see what files will be modified.
-* Files are expected to be encoded in UTF-8.  If encoded in anything else it will not be modified.
-* There is a limitation of exclusion of items.   This module recurses a function that uses `Get-ChildItems` with its `Exclude` parameter.  Excluded items that get passed to `Exclude` must have the value the name (eg: log.txt, *.txt) only.  As-is the code will not recongize exlcuded items by sub path.
+[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/marckassay/SeeDatum/blob/master/LICENSE) [![PS Gallery](https://img.shields.io/badge/install-PS%20Gallery-blue.svg)](https://www.powershellgallery.com/packages/SeeDatum/)
 
 ## Instructions
 
 To install, run the following command in PowerShell.
 
 ```powershell
-$ Install-Module EndOfLine
+$ Install-Module SeeDatum
 ```
-
-This module imports 'Encoding' by [Chris Kuech](https://github.com/chriskuech).
-
-[![PS Gallery](https://img.shields.io/badge/Encoding-PS%20Gallery-blue.svg)](https://www.powershellgallery.com/packages/Encoding)
 
 ## Usage
 
-### ConvertTo-LF
+### Get-Bytes
+
+This is the catalyst function for this module's ConvertTo functions.
 
 ```powershell
-ConvertTo-LF [-Path] <String[]> [[-Exclude] <String[]>]
-[-SkipIgnoreFile] [-ExportReportData] [-WhatIf] [<CommonParameters>]
+C:\> Get-Bytes -Value "Marc"
+
+Name                           Value
+----                           -----
+DecimalByte                    77
+DecimalByte                    97
+DecimalByte                    114
+DecimalByte                    99
 ```
 
-Converts CRLF to LF characters.
-This function will recursively read all files within the `Path` unless excluded by `.gitignore` file.  If a file is not excluded it is read to see if the current EOL character is the same as requested.  If so it will not modify the file.  And if the file is encoded other then UTF-8, it will not be modified.
+### ConvertTo-UTF8
 
-Example using the `WhatIf`, and `Verbose` switch.
+This function must be piped after `Get-Bytes`.
 
 ```powershell
-$ ConvertTo-LF -Path C:\repos\AiT -WhatIf -Verbose
+C:\> Get-Bytes -Value "Marc" | ConvertTo-UTF8
+
+Name                           Value
+----                           -----
+DecimalByte                    77
+Unicode                        U+004D
+DecimalByte                    97
+Unicode                        U+0061
+DecimalByte                    114
+Unicode                        U+0072
+DecimalByte                    99
+Unicode                        U+0063
 ```
 
-For this example, if you agree when prompted files will be modified without import of `.gitignore` file.
+### ConvertTo-Binary
+
+This function must be piped after `Get-Bytes`.  This function has a `Format` parameter that defaults to Octet.  The other option value is Quartets.
 
 ```powershell
-$ ConvertTo-LF -Path C:\repos\AiT -SkipIgnoreFile
+C:\> Get-Bytes -Value "Marc" | ConvertTo-Binary
+
+Name                           Value
+----                           -----
+Binary                         01001101
+DecimalByte                    77
+Binary                         01100001
+DecimalByte                    97
+Binary                         01110010
+DecimalByte                    114
+Binary                         01100011
+DecimalByte                    99
 ```
 
-If omitting `gitignore` file, it would be good to exclude modules too.
+Or formatted in Quartets
+```powershell
+C:\> Get-Bytes -Value "Marc" | ConvertTo-Binary -Format Quartets
+
+Name                           Value
+----                           -----
+Binary                         0100 1101
+DecimalByte                    77
+Binary                         0110 0001
+DecimalByte                    97
+Binary                         0111 0010
+DecimalByte                    114
+Binary                         0110 0011
+DecimalByte                    99
+```
+
+### ConvertTo-Character
+
+This function must be piped after `Get-Bytes`.
 
 ```powershell
-$ ConvertTo-LF -Path C:\repos\AiT -Exclude .\node_modules\, .\out\ -SkipIgnoreFile
+C:\> Get-Bytes -Value "Marc" | ConvertTo-Character
+
+Name                           Value
+----                           -----
+DecimalByte                    77
+Character                      M
+DecimalByte                    97
+Character                      a
+DecimalByte                    114
+Character                      r
+DecimalByte                    99
+Character                      c
 ```
 
-If you agree when prompted, files will be modified with import of `.gitignore` file if found.
+### Get-Bytes | ConvertTo-UTF8 | ConvertTo-Binary | ConvertTo-Character
 
 ```powershell
-$ ConvertTo-LF -Path C:\repos\AiT
+C:\> Get-Bytes -Value "Marc" | `
+        ConvertTo-UTF8 | `
+        ConvertTo-Character | `
+        ConvertTo-Binary -Format Quartets | `
+        ForEach-Object{[PSCustomObject]$_} | `
+        Format-Table -AutoSize Character, DecimalByte, Unicode, Binary
+
+Character DecimalByte Unicode Binary
+--------- ----------- ------- ------
+        M          77 U+004D  0100 1101
+        a          97 U+0061  0110 0001
+        r         114 U+0072  0111 0010
+        c          99 U+0063  0110 0011
 ```
-
-### ConvertTo-CRLF
-
-```powershell
-ConvertTo-CRLF [-Path] <String[]> [[-Exclude] <String[]>] 
-[-SkipIgnoreFile] [-ExportReportData] [-WhatIf] [<CommonParameters>]
-```
-
-Converts LF to CRLF characters.
-Besides the characters that will be replaced, all things that apply in `ConvertTo-LF` apply to this function too.
