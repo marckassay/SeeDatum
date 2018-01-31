@@ -68,6 +68,7 @@ DecimalByte                    99
 ```
 
 Or formatted in Quartets
+
 ```powershell
 C:\> Get-Bytes -Value "Marc" | ConvertTo-Binary -Format Quartets
 
